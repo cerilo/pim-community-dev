@@ -263,7 +263,9 @@ class Form extends Base
         }
 
         if ($label->hasAttribute('for')) {
-            if (false === strpos($value, ',')) {
+            if (false === strpos($value, ',') &&
+                null === $label->getParent()->find('css', '.select2-container-multi')
+            ) {
                 $for = $label->getAttribute('for');
                 if (0 === strpos($for, 's2id_')) {
                     // We are playing with a select2 widget
@@ -306,16 +308,40 @@ class Form extends Base
                     }
                 }
             } else {
-                foreach (explode(',', $value) as $value) {
-                    $label->getParent()->find('css', 'input[type="text"]')->click();
-                    $this->getSession()->wait(100000, "$('div:contains(\"Searching\")').length == 0");
-                    $option = $this->find('css', sprintf('li:contains("%s")', trim($value)));
-                    if (!$option) {
-                        throw new \InvalidArgumentException(
-                            sprintf('Could not find option "%s" for "%s"', trim($value), $label->getText())
-                        );
+                $splitedValues = explode(',', $value);
+                $selectedValues = $label->getParent()->findAll('css', '.select2-search-choice');
+
+                // Delete tag from right to left to prevent select2 DOM change
+                $selectedValues = array_reverse($selectedValues);
+
+                foreach ($selectedValues as $selectedValue) {
+                    if (false === in_array($selectedValue->getText(), $splitedValues)) {
+                        $closeButton = $selectedValue->find('css', 'a');
+                        if (!$closeButton) {
+                            throw new \InvalidArgumentException(
+                                sprintf(
+                                    'Could not find "%s" close button for "%s"',
+                                    trim($selectedValue->getText()),
+                                    $label->getText()
+                                )
+                            );
+                        }
+                        $closeButton->click();
                     }
-                    $option->click();
+                }
+
+                foreach ($splitedValues as $value) {
+                    if (trim($value)) {
+                        $label->getParent()->find('css', 'input[type="text"]')->click();
+                        $this->getSession()->wait(100000, "$('div:contains(\"Searching\")').length == 0");
+                        $option = $this->find('css', sprintf('li:contains("%s")', trim($value)));
+                        if (!$option) {
+                            throw new \InvalidArgumentException(
+                                sprintf('Could not find option "%s" for "%s"', trim($value), $label->getText())
+                            );
+                        }
+                        $option->click();
+                    }
                 }
             }
         } else {
